@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+    <title>كاميرا سير - فلاتر + فلاش + مؤقت | ضغط فائق</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background: black;
+            color: white;
+            font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: fixed;
+            width: 100%;
+            top: 0;
+            left: 0;
+        }
+
+        .camera-container {
+            flex: 1;
+            position: relative;
+            background: #000;
+            min-height: 0;
+        }
+
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: filter 0.2s ease;
+        }
+
+        .grid {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: none;
+        }
+        .grid.active {
+            display: block;
+        }
+        .grid-line {
+            position: absolute;
+            background: rgba(255,255,255,0.4);
+        }
+        .grid-line.vertical {
+            width: 1px;
+            height: 100%;
+        }
+        .grid-line.horizontal {
+            width: 100%;
+            height: 1px;
+        }
+
+        .filters-wrapper {
+            background: rgba(0,0,0,0.85);
+            backdrop-filter: blur(15px);
+            padding: 8px 0;
+        }
+        .filters-scroll {
+            display: flex;
+            gap: 10px;
+            overflow-x: auto;
+            padding: 0 16px;
+            scrollbar-width: thin;
+        }
+        .filter-item {
+            min-width: 65px;
+            height: 65px;
+            border-radius: 35px;
+            background: rgba(30,30,40,0.8);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 3px;
+            font-size: 11px;
+            border: 2px solid #444;
+            transition: 0.2s;
+            cursor: pointer;
+        }
+        .filter-item.active {
+            border-color: #fffc00;
+            transform: scale(1.03);
+            background: rgba(255,252,0,0.2);
+        }
+        .filter-icon {
+            font-size: 22px;
+        }
+
+        .controls {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            padding: 12px 20px;
+            background: rgba(0,0,0,0.95);
+            gap: 12px;
+            flex-wrap: wrap;
+            padding-bottom: max(12px, env(safe-area-inset-bottom));
+        }
+        .btn-circle {
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            border: none;
+            font-size: 34px;
+            cursor: pointer;
+            transition: 0.1s linear;
+            background: #2a2a2a;
+            color: white;
+        }
+        .btn-circle:active {
+            transform: scale(0.94);
+        }
+        #captureBtn {
+            background: white;
+            color: black;
+            border: 3px solid #fffc00;
+        }
+        #recordBtn {
+            background: #dc2626;
+        }
+        #recordBtn.recording {
+            animation: pulseRed 0.8s infinite;
+        }
+        @keyframes pulseRed {
+            0% { transform: scale(1); background: #dc2626; }
+            50% { transform: scale(1.08); background: #ff4444; }
+            100% { transform: scale(1); background: #dc2626; }
+        }
+        .control-small {
+            width: 52px;
+            height: 52px;
+            font-size: 24px;
+            background: #1f1f2e;
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+        }
+
+        /* أزرار جانبية جديدة في الجهة اليسرى */
+        .side-buttons-left {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            z-index: 60;
+        }
+        .side-btn {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: rgba(0,0,0,0.65);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255,255,255,0.3);
+            font-size: 24px;
+            cursor: pointer;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: 0.1s;
+        }
+        .side-btn:active {
+            transform: scale(0.92);
+        }
+        .side-btn.flash-on {
+            background: #ffaa00;
+            color: black;
+            border-color: #fffc00;
+        }
+        .side-btn.timer-active {
+            background: #4caf50;
+            border-color: #fffc00;
+        }
+
+        .zoom-panel {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(0,0,0,0.7);
+            backdrop-filter: blur(10px);
+            border-radius: 50px;
+            padding: 14px 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            z-index: 50;
+        }
+        .zoom-slider {
+            writing-mode: bt-lr;
+            -webkit-appearance: slider-vertical;
+            width: 34px;
+            height: 160px;
+            background: #333;
+            border-radius: 20px;
+        }
+        .zoom-btn {
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            background: #222;
+            border: 1px solid #fffc00;
+            font-size: 22px;
+            cursor: pointer;
+            color: white;
+        }
+        .zoom-value {
+            font-size: 12px;
+            background: black;
+            padding: 4px 8px;
+            border-radius: 20px;
+            margin-top: 4px;
+            font-weight: bold;
+        }
+
+        .gallery-preview {
+            position: fixed;
+            bottom: 110px;
+            left: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.92);
+            border-radius: 24px;
+            padding: 12px;
+            display: none;
+            gap: 12px;
+            overflow-x: auto;
+            z-index: 200;
+            backdrop-filter: blur(12px);
+        }
+        .gallery-preview.show {
+            display: flex;
+        }
+        .thumb {
+            width: 75px;
+            height: 75px;
+            border-radius: 14px;
+            object-fit: cover;
+            border: 2px solid #fffc00;
+            cursor: pointer;
+        }
+
+        .timer-rec {
+            position: absolute;
+            top: 18px;
+            left: 18px;
+            background: rgba(0,0,0,0.75);
+            padding: 6px 16px;
+            border-radius: 40px;
+            font-family: monospace;
+            font-size: 20px;
+            font-weight: bold;
+            display: none;
+            direction: ltr;
+            z-index: 60;
+        }
+        .timer-rec.active {
+            display: block;
+        }
+
+        .countdown-timer {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.85);
+            color: #fffc00;
+            font-size: 70px;
+            font-weight: bold;
+            padding: 25px 40px;
+            border-radius: 70px;
+            z-index: 100;
+            display: none;
+            font-family: monospace;
+            backdrop-filter: blur(12px);
+        }
+        .countdown-timer.active {
+            display: block;
+        }
+
+        canvas {
+            display: none;
+        }
+
+        #info {
+            position: absolute;
+            top: 18px;
+            right: 18px;
+            background: rgba(0,0,0,0.6);
+            padding: 5px 14px;
+            border-radius: 25px;
+            font-size: 11px;
+            backdrop-filter: blur(5px);
+            z-index: 55;
+        }
+    </style>
+</head>
+<body>
+
+<div class="camera-container">
+    <div id="info">📸 ضغط فائق | فلاش + مؤقت</div>
+    <div class="timer-rec" id="timerRec">00:00</div>
+    <div class="countdown-timer" id="countdownTimer">3</div>
+    <video id="video" autoplay playsinline muted></video>
+    <div class="grid" id="gridOverlay">
+        <div class="grid-line vertical" style="left: 33.33%"></div>
+        <div class="grid-line vertical" style="left: 66.66%"></div>
+        <div class="grid-line horizontal" style="top: 33.33%"></div>
+        <div class="grid-line horizontal" style="top: 66.66%"></div>
+    </div>
+    
+    <!-- الأزرار الجانبية اليسرى (فلاش + مؤقت) -->
+    <div class="side-buttons-left">
+        <button class="side-btn" id="flashSideBtn">🔦</button>
+        <button class="side-btn" id="timerSideBtn">⏱️</button>
+    </div>
+    
+    <div class="zoom-panel">
+        <button class="zoom-btn" id="zoomPlus">➕</button>
+        <input type="range" id="zoomRange" min="1" max="10" step="0.05" value="1" class="zoom-slider" orient="vertical">
+        <button class="zoom-btn" id="zoomMinus">➖</button>
+        <div class="zoom-value" id="zoomPercent">1.0x</div>
+    </div>
+</div>
+
+<div class="filters-wrapper">
+    <div class="filters-scroll" id="filterList">
+        <div class="filter-item active" data-filter="none"><span class="filter-icon">😎</span><span>طبيعي</span></div>
+        <div class="filter-item" data-filter="sepia(0.75)"><span class="filter-icon">📷</span><span>كلاسيك</span></div>
+        <div class="filter-item" data-filter="grayscale(1)"><span class="filter-icon">⚫</span><span>أبيض</span></div>
+        <div class="filter-item" data-filter="contrast(1.4) brightness(1.05)"><span class="filter-icon">🎭</span><span>دراما</span></div>
+        <div class="filter-item" data-filter="saturate(2.2)"><span class="filter-icon">🌈</span><span>زهي</span></div>
+        <div class="filter-item" data-filter="hue-rotate(170deg)"><span class="filter-icon">🌀</span><span>خيال</span></div>
+        <div class="filter-item" data-filter="invert(0.85)"><span class="filter-icon">🎞️</span><span>عكس</span></div>
+        <div class="filter-item" data-filter="blur(2px)"><span class="filter-icon">💨</span><span>ضباب</span></div>
+        <div class="filter-item" data-filter="brightness(1.15) contrast(1.3) saturate(1.6)"><span class="filter-icon">🌟</span><span>HDR</span></div>
+        <div class="filter-item" data-filter="brightness(1.1) drop-shadow(0 0 3px gold)"><span class="filter-icon">⚡</span><span>نيون</span></div>
+    </div>
+</div>
+
+<div class="controls">
+    <button class="control-small" id="switchCamBtn">🔄</button>
+    <button class="btn-circle" id="captureBtn">📸</button>
+    <button class="btn-circle" id="recordBtn">🎥</button>
+    <button class="control-small" id="galleryToggleBtn">🖼️</button>
+    <button class="control-small" id="gridToggleBtn">📐</button>
+</div>
+
+<div class="gallery-preview" id="galleryPanel"></div>
+
+<canvas id="canvas"></canvas>
+
+<script>
+    (function(){
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const captureBtn = document.getElementById('captureBtn');
+        const recordBtn = document.getElementById('recordBtn');
+        const switchBtn = document.getElementById('switchCamBtn');
+        const zoomRange = document.getElementById('zoomRange');
+        const zoomPlus = document.getElementById('zoomPlus');
+        const zoomMinus = document.getElementById('zoomMinus');
+        const zoomPercent = document.getElementById('zoomPercent');
+        const gridToggle = document.getElementById('gridToggleBtn');
+        const gridOverlay = document.getElementById('gridOverlay');
+        const galleryPanel = document.getElementById('galleryPanel');
+        const galleryToggle = document.getElementById('galleryToggleBtn');
+        const timerEl = document.getElementById('timerRec');
+        const countdownEl = document.getElementById('countdownTimer');
+        const flashSideBtn = document.getElementById('flashSideBtn');
+        const timerSideBtn = document.getElementById('timerSideBtn');
+
+        let currentStream = null;
+        let currentFacing = 'environment';
+        let currentFilter = 'none';
+        let videoTrack = null;
+        let gallery = [];
+        
+        // ميزات جديدة
+        let flashEnabled = false;
+        let timerEnabled = false;
+        let pendingCapture = false;
+        
+        // متغيرات التسجيل
+        let mediaRecorder = null;
+        let recordedChunks = [];
+        let isRecording = false;
+        let recordSeconds = 0;
+        let recordInterval = null;
+        let canvasStream = null;
+        let animationId = null;
+        let recordingCanvas = null;
+        let recordingCtx = null;
+
+        const MAX_ZOOM = 10;
+
+        function loadGallery(){
+            try{
+                const saved = localStorage.getItem('pro_gallery_final');
+                if(saved) gallery = JSON.parse(saved);
+                if(!Array.isArray(gallery)) gallery = [];
+                if(gallery.length > 15) gallery = gallery.slice(0,15);
+                renderGallery();
+            }catch(e){ gallery = []; }
+        }
+        
+        function saveGallery(){
+            localStorage.setItem('pro_gallery_final', JSON.stringify(gallery.slice(0,15)));
+            renderGallery();
+        }
+        
+        function addToGallery(dataURL, type){
+            gallery.unshift({ data: dataURL, type: type, time: Date.now() });
+            if(gallery.length > 15) gallery.pop();
+            saveGallery();
+        }
+        
+        function renderGallery(){
+            galleryPanel.innerHTML = '<div style="color:white; padding:0 10px;">📸 المعرض</div>';
+            gallery.forEach(item => {
+                const img = document.createElement('img');
+                img.src = item.data;
+                img.className = 'thumb';
+                img.onclick = (e) => {
+                    e.stopPropagation();
+                    const a = document.createElement('a');
+                    a.href = item.data;
+                    a.download = `capture_${item.time}.${item.type === 'image' ? 'webp' : 'webm'}`;
+                    a.click();
+                };
+                galleryPanel.appendChild(img);
+            });
+        }
+        
+        function downloadDirect(dataURL, filename){
+            const link = document.createElement('a');
+            link.href = dataURL;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+        
+        // تشغيل/إيقاف الفلاش
+        async function toggleFlash(){
+            if(!currentStream) return;
+            const tracks = currentStream.getVideoTracks();
+            if(tracks.length > 0){
+                try {
+                    await tracks[0].applyConstraints({
+                        advanced: [{ torch: !flashEnabled }]
+                    });
+                    flashEnabled = !flashEnabled;
+                    flashSideBtn.innerHTML = flashEnabled ? "🔦" : "🔦";
+                    flashSideBtn.classList.toggle('flash-on', flashEnabled);
+                } catch(e){
+                    alert("الفلاش غير مدعوم على هذه الكاميرا");
+                }
+            }
+        }
+        
+        // تفعيل المؤقت
+        function toggleTimer(){
+            timerEnabled = !timerEnabled;
+            timerSideBtn.classList.toggle('timer-active', timerEnabled);
+            timerSideBtn.style.background = timerEnabled ? '#4caf50' : 'rgba(0,0,0,0.65)';
+        }
+        
+        // عد تنازلي
+        function startCountdown(callback){
+            let count = 3;
+            countdownEl.innerText = count;
+            countdownEl.classList.add('active');
+            const interval = setInterval(() => {
+                count--;
+                if(count >= 0){
+                    countdownEl.innerText = count || "📸";
+                }
+                if(count < 0){
+                    clearInterval(interval);
+                    countdownEl.classList.remove('active');
+                    callback();
+                }
+            }, 1000);
+        }
+        
+        // التقاط الصورة
+        function performCapture(){
+            if(!video.videoWidth) return;
+            const ctx = canvas.getContext('2d');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.filter = currentFilter;
+            
+            if(video.style.transform && video.style.transform !== 'none'){
+                const scaleMatch = video.style.transform.match(/scale\(([\d.]+)\)/);
+                if(scaleMatch){
+                    const scale = parseFloat(scaleMatch[1]);
+                    canvas.width = canvas.width * scale;
+                    canvas.height = canvas.height * scale;
+                    ctx.scale(scale, scale);
+                }
+            }
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            // ضغط عالي جداً: جودة 0.75
+            const imageData = canvas.toDataURL('image/webp', 0.75);
+            addToGallery(imageData, 'image');
+            downloadDirect(imageData, `photo_${Date.now()}.webp`);
+            
+            const flashDiv = document.createElement('div');
+            flashDiv.style.position = 'fixed';
+            flashDiv.style.top = 0; flashDiv.style.left = 0;
+            flashDiv.style.width = '100%'; flashDiv.style.height = '100%';
+            flashDiv.style.backgroundColor = 'white';
+            flashDiv.style.opacity = '0.6';
+            flashDiv.style.pointerEvents = 'none';
+            document.body.appendChild(flashDiv);
+            setTimeout(() => flashDiv.remove(), 100);
+        }
+        
+        // زر التصوير مع المؤقت
+        captureBtn.onclick = () => {
+            if(timerEnabled){
+                startCountdown(() => performCapture());
+            } else {
+                performCapture();
+            }
+        };
+        
+        async function startCamera(facing){
+            if(currentStream){
+                if(canvasStream) canvasStream.getTracks().forEach(t => t.stop());
+                currentStream.getTracks().forEach(t => t.stop());
+            }
+            try{
+                const constraints = {
+                    video: { facingMode: { exact: facing }, width: { ideal: 1280 }, height: { ideal: 720 } },
+                    audio: true
+                };
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                currentStream = stream;
+                video.srcObject = stream;
+                videoTrack = stream.getVideoTracks()[0];
+                flashEnabled = false;
+                flashSideBtn.classList.remove('flash-on');
+                
+                if(videoTrack && videoTrack.getCapabilities && videoTrack.getCapabilities().zoom){
+                    const capabilities = videoTrack.getCapabilities();
+                    let minZoom = capabilities.min || 1;
+                    let maxZoom = Math.min(capabilities.max || MAX_ZOOM, MAX_ZOOM);
+                    if(maxZoom < 1) maxZoom = MAX_ZOOM;
+                    
+                    zoomRange.min = minZoom;
+                    zoomRange.max = maxZoom;
+                    zoomRange.step = capabilities.step || 0.05;
+                    zoomRange.value = 1;
+                    updateZoomPercent(1);
+                    
+                    const applyZoom = (val) => {
+                        const zoomVal = parseFloat(val);
+                        videoTrack.applyConstraints({ advanced: [{ zoom: zoomVal }] }).catch(e => console.warn("zoom error"));
+                        updateZoomPercent(zoomVal);
+                    };
+                    
+                    zoomRange.oninput = (e) => applyZoom(e.target.value);
+                    zoomPlus.onclick = () => {
+                        let newVal = Math.min(parseFloat(zoomRange.value) + 0.2, maxZoom);
+                        zoomRange.value = newVal;
+                        applyZoom(newVal);
+                    };
+                    zoomMinus.onclick = () => {
+                        let newVal = Math.max(parseFloat(zoomRange.value) - 0.2, minZoom);
+                        zoomRange.value = newVal;
+                        applyZoom(newVal);
+                    };
+                } else {
+                    setupDigitalZoom();
+                }
+            } catch(err){
+                try{
+                    const fallbackStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                    currentStream = fallbackStream;
+                    video.srcObject = fallbackStream;
+                    videoTrack = fallbackStream.getVideoTracks()[0];
+                    setupDigitalZoom();
+                }catch(e2){ alert("الرجاء السماح بالوصول إلى الكاميرا"); }
+            }
+        }
+        
+        function setupDigitalZoom(){
+            zoomRange.min = 1;
+            zoomRange.max = MAX_ZOOM;
+            zoomRange.step = 0.05;
+            zoomRange.value = 1;
+            updateZoomPercent(1);
+            const applyZoom = (val) => {
+                const scale = parseFloat(val);
+                video.style.transform = `scale(${scale})`;
+                video.style.transformOrigin = 'center center';
+                updateZoomPercent(scale);
+            };
+            zoomRange.oninput = (e) => applyZoom(e.target.value);
+            zoomPlus.onclick = () => {
+                let newVal = Math.min(parseFloat(zoomRange.value) + 0.2, MAX_ZOOM);
+                zoomRange.value = newVal;
+                applyZoom(newVal);
+            };
+            zoomMinus.onclick = () => {
+                let newVal = Math.max(parseFloat(zoomRange.value) - 0.2, 1);
+                zoomRange.value = newVal;
+                applyZoom(newVal);
+            };
+        }
+        
+        function updateZoomPercent(val){
+            zoomPercent.innerText = `${parseFloat(val).toFixed(1)}x`;
+        }
+        
+        switchBtn.onclick = () => {
+            currentFacing = currentFacing === 'environment' ? 'user' : 'environment';
+            startCamera(currentFacing);
+        };
+        
+        document.querySelectorAll('.filter-item').forEach(btn => {
+            btn.onclick = () => {
+                document.querySelector('.filter-item.active')?.classList.remove('active');
+                btn.classList.add('active');
+                currentFilter = btn.dataset.filter;
+                video.style.filter = currentFilter;
+            };
+        });
+        
+        gridToggle.onclick = () => gridOverlay.classList.toggle('active');
+        
+        // تسجيل الفيديو مع ضغط عالي
+        async function startVideoRecording(){
+            if(!currentStream || isRecording) return;
+            
+            if(!recordingCanvas){
+                recordingCanvas = document.createElement('canvas');
+                recordingCanvas.width = video.videoWidth || 1280;
+                recordingCanvas.height = video.videoHeight || 720;
+                recordingCtx = recordingCanvas.getContext('2d');
+            }
+            
+            recordedChunks = [];
+            recordingCanvas.width = video.videoWidth;
+            recordingCanvas.height = video.videoHeight;
+            
+            const drawFrame = () => {
+                if(!isRecording) return;
+                if(recordingCtx && video.videoWidth > 0){
+                    recordingCtx.filter = currentFilter;
+                    recordingCtx.drawImage(video, 0, 0, recordingCanvas.width, recordingCanvas.height);
+                }
+                if(isRecording){
+                    animationId = requestAnimationFrame(drawFrame);
+                }
+            };
+            
+            try {
+                const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                const audioTrack = audioStream.getAudioTracks()[0];
+                canvasStream = recordingCanvas.captureStream(30);
+                if(audioTrack) canvasStream.addTrack(audioTrack);
+                
+                // ضغط الفيديو: 2.5 ميجابت/ث
+                const options = { mimeType: 'video/webm', videoBitsPerSecond: 2500000 };
+                mediaRecorder = new MediaRecorder(canvasStream, options);
+                mediaRecorder.ondataavailable = (e) => {
+                    if(e.data.size > 0) recordedChunks.push(e.data);
+                };
+                mediaRecorder.onstop = () => {
+                    const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                    const url = URL.createObjectURL(blob);
+                    addToGallery(url, 'video');
+                    downloadDirect(url, `video_${Date.now()}.webm`);
+                    URL.revokeObjectURL(url);
+                    recordedChunks = [];
+                    if(audioTrack) audioTrack.stop();
+                    if(canvasStream) canvasStream.getTracks().forEach(t => t.stop());
+                    canvasStream = null;
+                };
+                
+                mediaRecorder.start(1000);
+                isRecording = true;
+                recordBtn.classList.add('recording');
+                recordSeconds = 0;
+                timerEl.classList.add('active');
+                drawFrame();
+                
+                recordInterval = setInterval(() => {
+                    recordSeconds++;
+                    let mins = Math.floor(recordSeconds/60);
+                    let secs = recordSeconds%60;
+                    timerEl.innerText = `${mins.toString().padStart(2,'0')}:${secs.toString().padStart(2,'0')}`;
+                }, 1000);
+                
+            } catch(e){
+                console.error("Recording error:", e);
+                alert("التسجيل غير مدعوم");
+                isRecording = false;
+            }
+        }
+        
+        function stopVideoRecording(){
+            if(mediaRecorder && isRecording && mediaRecorder.state === 'recording'){
+                try{
+                    mediaRecorder.stop();
+                }catch(e){}
+                isRecording = false;
+                recordBtn.classList.remove('recording');
+                clearInterval(recordInterval);
+                timerEl.classList.remove('active');
+                if(animationId){
+                    cancelAnimationFrame(animationId);
+                    animationId = null;
+                }
+            }
+        }
+        
+        recordBtn.onclick = () => {
+            if(isRecording) stopVideoRecording();
+            else startVideoRecording();
+        };
+        
+        galleryToggle.onclick = () => {
+            galleryPanel.classList.toggle('show');
+            setTimeout(() => {
+                if(galleryPanel.classList.contains('show')) galleryPanel.classList.remove('show');
+            }, 4000);
+        };
+        
+        // ربط الأزرار الجانبية
+        flashSideBtn.onclick = toggleFlash;
+        timerSideBtn.onclick = toggleTimer;
+        
+        startCamera('environment');
+        loadGallery();
+        
+        window.addEventListener('beforeunload', () => {
+            if(mediaRecorder && isRecording) mediaRecorder.stop();
+            if(canvasStream) canvasStream.getTracks().forEach(t => t.stop());
+            if(currentStream) currentStream.getTracks().forEach(t => t.stop());
+            if(animationId) cancelAnimationFrame(animationId);
+        });
+    })();
+</script>
+</body>
+</html>
